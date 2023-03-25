@@ -3,7 +3,7 @@ from typing import Any, List, Optional
 import pytest
 from sqlalchemy import String
 from sqlalchemy.orm import DeclarativeBase, mapped_column
-from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.sql.elements import ColumnElement
 
 from axantir.context import ContextOriginEnum, SecurityContext
 from axantir.exceptions import BadSecurityContextExpectation
@@ -66,7 +66,7 @@ def test_registry_register_policy(registry: Registry) -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return None
 
     TARGET_TYPE = "test_target"
@@ -102,7 +102,7 @@ def test_registry_double_register_policy() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return None
 
     TARGET_TYPE = "test_target"
@@ -167,7 +167,7 @@ def test_simple_permission_check(granted: bool) -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return None
 
     AlwaysGrantPolicy(
@@ -218,7 +218,7 @@ def test_simple_sqla_filter(granted: bool) -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             if not granted:
                 return None
 
@@ -233,10 +233,10 @@ def test_simple_sqla_filter(granted: bool) -> None:
     filt = sqla_filter_for_permissions(
         security_context=TestContext(origin=ContextOriginEnum.internal, scopes=["*"]),
         permissions=[CAN_MESS_WITH_THINGY],
-        targets=[Thingy()],
+        targets=[Thingy],
     )
     if granted:
-        assert isinstance(filt, ClauseElement)
+        assert isinstance(filt, ColumnElement)
     else:
         assert filt is None
 
@@ -274,7 +274,7 @@ def test_permission_context_failure() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             if security_context.user.is_someone_special:
                 return None
 
@@ -301,7 +301,7 @@ def test_permission_context_failure() -> None:
                 origin=ContextOriginEnum.internal, scopes=["*"]
             ),
             permissions=[CAN_MESS_WITH_THINGY],
-            targets=[Thingy()],
+            targets=[Thingy],
         )
 
 
@@ -347,7 +347,7 @@ def test_permission_with_no_policy() -> None:
                     origin=ContextOriginEnum.internal, scopes=["*"]
                 ),
                 permissions=[CAN_MESS_WITH_THINGY],
-                targets=[Thingy()],
+                targets=[Thingy],
             )
             is None
         )
@@ -394,7 +394,7 @@ def test_permission_with_unknown_target_classes() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return Thingy.field1 == "foo"
 
     AlwaysGrantPolicy(
@@ -429,10 +429,14 @@ def test_permission_with_unknown_target_classes() -> None:
             is None
         )
 
-    assert len(w) == 1
+    assert len(w) == 2
     assert (
         str(w[0].message)
         == "No permission requested has a policy for target class `str`"
+    )
+    assert (
+        str(w[1].message)
+        == "Targets to `sqla_filter_for_permissions` should be classes, not instances"
     )
 
 
@@ -474,7 +478,7 @@ def test_permissions_mismatch_target() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return Thingy.field1 == "foo"
 
     AlwaysGrantPolicy(
@@ -535,7 +539,7 @@ def test_permissions_no_targets() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ClauseElement]:
+        ) -> Optional[ColumnElement]:
             return Thingy.field1 == "foo"
 
     AlwaysGrantPolicy(

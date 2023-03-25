@@ -5,7 +5,7 @@ from collections import defaultdict
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type
 
-from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..context import SecurityContext
 from .models import Permission, TargetPolicy
@@ -59,7 +59,7 @@ def sqla_filter_for_permissions(
     security_context: SecurityContext,
     permissions: List[Permission],
     targets: List[Any],
-) -> Optional[ClauseElement]:
+) -> Optional[ColumnElement]:
     policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
 
     for target in targets:

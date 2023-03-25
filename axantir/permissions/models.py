@@ -2,7 +2,7 @@ import abc
 from typing import TYPE_CHECKING, Any, List, Optional, Type
 
 from pydantic import BaseModel, Field
-from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..context import SecurityContext
 from ..fields import IdSlug
@@ -55,7 +55,7 @@ class TargetPolicy(BaseModel, abc.ABC):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> Optional[ClauseElement]:
+    ) -> Optional[ColumnElement]:
         ...  # pragma: no cover
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
