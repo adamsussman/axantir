@@ -16,7 +16,7 @@ class ContextOriginEnum(str, Enum):
 
 class SecurityContext(BaseModel, abc.ABC):
     origin: ContextOriginEnum
-    scopes: typing.List[str] = Field(min_items=1)
+    scopes: typing.List[str] = Field(min_items=1, exclude=True)
 
     class Config:
         allow_mutation = False
