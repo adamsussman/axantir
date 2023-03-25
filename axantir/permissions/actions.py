@@ -1,3 +1,4 @@
+import inspect
 import operator
 import warnings
 from collections import defaultdict
@@ -61,6 +62,13 @@ def sqla_filter_for_permissions(
 ) -> Optional[ClauseElement]:
     policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
 
+    for target in targets:
+        if not inspect.isclass(target):
+            warnings.warn(
+                "Targets to `sqla_filter_for_permissions` should be classes, not instances",
+                stacklevel=3,
+            )
+
     if (
         policy_permissions
         and policy_targets
@@ -106,7 +114,8 @@ def _get_policy_groups(
             target_class_policies[target_class].add(policy)
 
     for target in targets:
-        if target.__class__ not in target_class_policies:
+        target_class = target if inspect.isclass(target) else target.__class__
+        if target_class not in target_class_policies:
             warnings.warn(
                 f"No permission requested has a policy for target class "
                 f"`{target_class.__name__}`",
@@ -114,7 +123,7 @@ def _get_policy_groups(
             )
             return {}, {}
 
-        for policy in target_class_policies[target.__class__]:
+        for policy in target_class_policies[target_class]:
             policy_targets[policy].append(target)
 
     if (
