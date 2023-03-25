@@ -97,7 +97,7 @@ def _get_policy_groups(
             warnings.warn(
                 f"Permission `{permission.id}` has target_type with no policy: "
                 f"`{permission.target_type}`",
-                stacklevel=2,
+                stacklevel=3,
             )
             return {}, {}
 
@@ -109,8 +109,8 @@ def _get_policy_groups(
         if target.__class__ not in target_class_policies:
             warnings.warn(
                 f"No permission requested has a policy for target class "
-                f"`{target.__class__.__name__}`",
-                stacklevel=2,
+                f"`{target_class.__name__}`",
+                stacklevel=3,
             )
             return {}, {}
 
@@ -127,7 +127,7 @@ def _get_policy_groups(
                 ", ".join(sorted([t.target_type for t in policy_permissions.keys()])),
                 ", ".join(sorted([t.target_type for t in policy_targets.keys()])),
             ),
-            stacklevel=2,
+            stacklevel=3,
         )
         return {}, {}
 
