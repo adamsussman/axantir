@@ -79,8 +79,7 @@ class TargetPolicy(BaseModel, abc.ABC):
         return ":".join(
             [
                 self.target_type,
-                "/".join(sorted([c.__name__ for c in self.target_classes])),
-                "/".join(sorted([p.name for p in self.target_permissions])),
+                "/".join(sorted([p.id for p in self.target_permissions])),
             ]
         )
 
