@@ -82,7 +82,7 @@ def test_registry_register_policy(registry: Registry) -> None:
         target_permissions=[PERM],
     )
 
-    assert registry.policies_by_target.get(policy.target_type) == policy
+    assert registry.policies_by_target.get(policy.target_type) == {policy}
     assert registry.get_all_target_policies() == [policy]
 
 
@@ -566,7 +566,267 @@ def test_permissions_no_targets() -> None:
     )
 
 
+def test_no_policy_for_permission() -> None:
+    TARGET_TYPE = "thingy"
+
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=TARGET_TYPE,
+    )
+
+    CAN_DO_OTHER_THING = Permission(
+        name="do_whatever",
+        target_type=TARGET_TYPE,
+    )
+
+    class TestContext(SecurityContext):
+        @property
+        def is_admin(self) -> bool:
+            return False
+
+        def audit_data(self) -> dict:
+            return {}
+
+    class Thingy(object):
+        ...
+
+    class AlwaysGrantPolicy(TargetPolicy):
+        def has_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> bool:
+            return True
+
+        def sqla_filter_for_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> Optional[ColumnElement]:
+            return True  # type: ignore
+
+    AlwaysGrantPolicy(
+        target_type=TARGET_TYPE,
+        target_classes=[Thingy],
+        target_permissions=[CAN_MESS_WITH_THINGY],
+    )
+
+    with pytest.warns(UserWarning) as w:
+        assert not has_permissions(
+            security_context=TestContext(
+                origin=ContextOriginEnum.internal, scopes=["*"]
+            ),
+            permissions=[CAN_DO_OTHER_THING],
+            targets=[Thingy()],
+        )
+
+    assert len(w) == 1
+    assert (
+        str(w[0].message)
+        == "No permission requested has a policy for target class `Thingy`"
+    )
+
+    with pytest.warns(UserWarning) as w:
+        assert (
+            sqla_filter_for_permissions(
+                security_context=TestContext(
+                    origin=ContextOriginEnum.internal, scopes=["*"]
+                ),
+                permissions=[CAN_DO_OTHER_THING],
+                targets=[Thingy],
+            )
+            is None
+        )
+
+    assert len(w) == 1
+    assert (
+        str(w[0].message)
+        == "No permission requested has a policy for target class `Thingy`"
+    )
+
+
+def test_multiple_policies_for_target() -> None:
+    TARGET_TYPE = "thingy"
+
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=TARGET_TYPE,
+    )
+
+    CAN_DO_OTHER_THING = Permission(
+        name="do_whatever",
+        target_type=TARGET_TYPE,
+    )
+
+    class TestContext(SecurityContext):
+        @property
+        def is_admin(self) -> bool:
+            return False
+
+        def audit_data(self) -> dict:
+            return {}
+
+    class Thingy(object):
+        ...
+
+    class AlwaysGrantPolicy(TargetPolicy):
+        def has_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> bool:
+            return True
+
+        def sqla_filter_for_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> Optional[ColumnElement]:
+            return True  # type: ignore
+
+    class AlwaysDenyPolicy(TargetPolicy):
+        def has_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> bool:
+            return False
+
+        def sqla_filter_for_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> Optional[ColumnElement]:
+            return None
+
+    AlwaysGrantPolicy(
+        target_type=TARGET_TYPE,
+        target_classes=[Thingy],
+        target_permissions=[CAN_MESS_WITH_THINGY],
+    )
+
+    AlwaysDenyPolicy(
+        target_type=TARGET_TYPE,
+        target_classes=[Thingy],
+        target_permissions=[CAN_DO_OTHER_THING],
+    )
+
+    assert has_permissions(
+        security_context=TestContext(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_MESS_WITH_THINGY],
+        targets=[Thingy()],
+    )
+
+    assert not has_permissions(
+        security_context=TestContext(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_DO_OTHER_THING],
+        targets=[Thingy()],
+    )
+
+    assert not has_permissions(
+        security_context=TestContext(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
+        targets=[Thingy()],
+    )
+
+    assert (
+        sqla_filter_for_permissions(
+            security_context=TestContext(
+                origin=ContextOriginEnum.internal, scopes=["*"]
+            ),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy],
+        )
+        is not None
+    )
+
+    assert (
+        sqla_filter_for_permissions(
+            security_context=TestContext(
+                origin=ContextOriginEnum.internal, scopes=["*"]
+            ),
+            permissions=[CAN_DO_OTHER_THING],
+            targets=[Thingy],
+        )
+        is None
+    )
+
+    assert (
+        sqla_filter_for_permissions(
+            security_context=TestContext(
+                origin=ContextOriginEnum.internal, scopes=["*"]
+            ),
+            permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
+            targets=[Thingy],
+        )
+        is None
+    )
+
+
+def test_multiple_policies_for_target_with_overlap() -> None:
+    pass
+
+
+def test_sqla_filter_on_instances() -> None:
+    pass
+
+
+def test_policy_target_mismatch() -> None:
+    TARGET_TYPE = "thingy"
+
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=TARGET_TYPE,
+    )
+
+    class TestContext(SecurityContext):
+        @property
+        def is_admin(self) -> bool:
+            return False
+
+        def audit_data(self) -> dict:
+            return {}
+
+    class Thingy(object):
+        ...
+
+    class AlwaysGrantPolicy(TargetPolicy):
+        def has_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> bool:
+            return True
+
+        def sqla_filter_for_permissions(
+            self,
+            security_context: SecurityContext,
+            permissions: List[Permission],
+            targets: List[Any],
+        ) -> Optional[ColumnElement]:
+            return True  # type: ignore
+
+    with pytest.raises(Exception) as e:
+        AlwaysGrantPolicy(
+            target_type="foo",
+            target_classes=[Thingy],
+            target_permissions=[CAN_MESS_WITH_THINGY],
+        )
+
+    assert "does not match the policy target type" in str(e.value)
+
+
 # multi-perms
 # multi-targets -> make sure unhandled target type is not merged with other successes
 # multi-target-types
 # scopes
+# sqla_filter_for_permissions with target instances
+# has_permissions/sqla_filter_for_permissions with a permission for which no policy exists
+# multiple policies per target type, overlap and not overlap

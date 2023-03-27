@@ -1,7 +1,7 @@
 import abc
 from typing import TYPE_CHECKING, Any, List, Optional, Type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 from sqlalchemy.sql.elements import ColumnElement
 
 from ..context import SecurityContext
@@ -40,6 +40,17 @@ class TargetPolicy(BaseModel, abc.ABC):
     target_classes: List[Type] = Field(min_items=1)
     target_permissions: List[Permission] = Field(min_items=1)
 
+    @root_validator
+    def validate_targets(cls, values: dict) -> dict:
+        for permission in values.get("target_permissions", []):
+            if values.get("target_type") != permission.target_type:
+                raise ValueError(
+                    f"permission `{permission.name}`'s target type does not "
+                    "match the policy target type"
+                )
+
+        return values
+
     @abc.abstractmethod
     def has_permissions(
         self,
@@ -63,5 +74,15 @@ class TargetPolicy(BaseModel, abc.ABC):
 
         get_registry().register_target_policy(self)
 
+    @property
+    def id(self) -> str:
+        return ":".join(
+            [
+                self.target_type,
+                "/".join(sorted([c.__name__ for c in self.target_classes])),
+                "/".join(sorted([p.name for p in self.target_permissions])),
+            ]
+        )
+
     def __hash__(self) -> int:
-        return hash(self.target_type)
+        return hash(self.id)

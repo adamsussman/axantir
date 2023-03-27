@@ -94,14 +94,15 @@ def _get_policy_groups(
     targets: List[Any],
 ) -> Tuple[Dict[TargetPolicy, Set[Permission]], Dict[TargetPolicy, List[Any]]]:
     policy_permissions: Dict[TargetPolicy, Set[Permission]] = defaultdict(set)
+    permission_policies: Dict[Permission, Set[TargetPolicy]] = defaultdict(set)
     policy_targets: Dict[TargetPolicy, List[Any]] = defaultdict(list)
     target_class_policies: Dict[Any, Set[TargetPolicy]] = defaultdict(set)
 
     registry = get_registry()
 
     for permission in permissions:
-        policy = registry.policies_by_target.get(permission.target_type)
-        if not policy:
+        policies = registry.policies_by_target.get(permission.target_type)
+        if not policies:
             warnings.warn(
                 f"Permission `{permission.id}` has target_type with no policy: "
                 f"`{permission.target_type}`",
@@ -109,9 +110,15 @@ def _get_policy_groups(
             )
             return {}, {}
 
-        policy_permissions[policy].add(permission)
-        for target_class in policy.target_classes:
-            target_class_policies[target_class].add(policy)
+        for policy in policies:
+            if permission not in policy.target_permissions:
+                continue
+
+            policy_permissions[policy].add(permission)
+            for target_class in policy.target_classes:
+                target_class_policies[target_class].add(policy)
+            for target_permission in policy.target_permissions:
+                permission_policies[target_permission].add(policy)
 
     for target in targets:
         target_class = target if inspect.isclass(target) else target.__class__
@@ -136,6 +143,14 @@ def _get_policy_groups(
                 ", ".join(sorted([t.target_type for t in policy_permissions.keys()])),
                 ", ".join(sorted([t.target_type for t in policy_targets.keys()])),
             ),
+            stacklevel=3,
+        )
+        return {}, {}
+
+    unhandled_permissions = [p.id for p in permissions if p not in permission_policies]
+    if unhandled_permissions:
+        warnings.warn(
+            f"No policy found for permission(s): {', '.join(unhandled_permissions)}",
             stacklevel=3,
         )
         return {}, {}
