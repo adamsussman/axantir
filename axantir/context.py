@@ -22,7 +22,7 @@ class SecurityContext(BaseModel, abc.ABC):
         allow_mutation = False
 
     @abc.abstractmethod
-    def audit_data(self) -> dict:
+    def audit_data(self) -> dict:  # pragma: nocover
         ...
 
     def __getattr__(self, field: str) -> typing.Any:
