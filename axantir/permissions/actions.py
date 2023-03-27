@@ -26,6 +26,12 @@ def has_permissions(
     permissions: List[Permission],
     targets: List[Any],
 ) -> bool:
+    permissions = _filter_permissions_by_scopes(
+        scopes=security_context.scopes, permissions=permissions
+    )
+    if not permissions:
+        return False
+
     policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
 
     if (
@@ -60,6 +66,12 @@ def sqla_filter_for_permissions(
     permissions: List[Permission],
     targets: List[Any],
 ) -> Optional[ColumnElement]:
+    permissions = _filter_permissions_by_scopes(
+        scopes=security_context.scopes, permissions=permissions
+    )
+    if not permissions:
+        return None
+
     policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
 
     for target in targets:
@@ -162,3 +174,12 @@ def _validate_target_classes(
     target_objects: List[Any], target_classes: List[Type]
 ) -> bool:
     return set([t.__class__ for t in target_objects]) == set(target_classes)
+
+
+def _filter_permissions_by_scopes(
+    scopes: List[str], permissions: List[Permission]
+) -> List[Permission]:
+    if scopes == ["*"]:
+        return permissions
+
+    return [p for p in permissions if p.id in scopes]

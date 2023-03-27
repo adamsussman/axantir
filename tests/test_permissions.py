@@ -658,7 +658,45 @@ def test_policy_target_mismatch() -> None:
     assert "does not match the policy target type" in str(e.value)
 
 
+def test_scopes_mismatch() -> None:
+    TARGET_TYPE = "thingy"
+
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=TARGET_TYPE,
+    )
+
+    CAN_DO_OTHER_THING = Permission(
+        name="do_whatever",
+        target_type=TARGET_TYPE,
+    )
+
+    AlwaysGrantPolicy(
+        target_type=TARGET_TYPE,
+        target_classes=[Thingy],
+        target_permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
+    )
+
+    assert not has_permissions(
+        security_context=Context(
+            origin=ContextOriginEnum.internal, scopes=[CAN_DO_OTHER_THING.id]
+        ),
+        permissions=[CAN_MESS_WITH_THINGY],
+        targets=[Thingy()],
+    )
+
+    assert (
+        sqla_filter_for_permissions(
+            security_context=Context(
+                origin=ContextOriginEnum.internal, scopes=[CAN_DO_OTHER_THING.id]
+            ),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy()],
+        )
+        is None
+    )
+
+
 # multi-perms
 # multi-targets -> make sure unhandled target type is not merged with other successes
 # multi-target-types
-# scopes
