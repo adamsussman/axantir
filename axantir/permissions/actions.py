@@ -40,9 +40,9 @@ def has_permissions(
         and _validate_target_classes(
             target_objects=targets,
             target_classes=[
-                cls
+                permission.target_type
                 for policy in policy_permissions.keys()
-                for cls in policy.target_classes
+                for permission in policy.target_permissions
             ],
         )
         and all(
@@ -106,63 +106,59 @@ def _get_policy_groups(
     targets: List[Any],
 ) -> Tuple[Dict[TargetPolicy, Set[Permission]], Dict[TargetPolicy, List[Any]]]:
     policy_permissions: Dict[TargetPolicy, Set[Permission]] = defaultdict(set)
-    permission_policies: Dict[Permission, Set[TargetPolicy]] = defaultdict(set)
     policy_targets: Dict[TargetPolicy, List[Any]] = defaultdict(list)
-    target_class_policies: Dict[Any, Set[TargetPolicy]] = defaultdict(set)
 
     registry = get_registry()
+    target_types = set([t if inspect.isclass(t) else t.__class__ for t in targets])
 
     for permission in permissions:
-        policies = registry.policies_by_target.get(permission.target_type)
+        policies = registry.policies_by_permission.get(permission) or set()
         if not policies:
             warnings.warn(
-                f"Permission `{permission.id}` has target_type with no policy: "
-                f"`{permission.target_type}`",
+                f"No policy found for permission: `{permission.name}`",
                 stacklevel=3,
             )
             return {}, {}
 
         for policy in policies:
-            if permission not in policy.target_permissions:
-                continue
-
-            policy_permissions[policy].add(permission)
-            for target_class in policy.target_classes:
-                target_class_policies[target_class].add(policy)
-            for target_permission in policy.target_permissions:
-                permission_policies[target_permission].add(policy)
-
-    for target in targets:
-        target_class = target if inspect.isclass(target) else target.__class__
-        if target_class not in target_class_policies:
-            warnings.warn(
-                f"No permission requested has a policy for target class "
-                f"`{target_class.__name__}`",
-                stacklevel=3,
+            policy_permissions[policy].update(
+                [
+                    perm
+                    for perm in permissions
+                    if perm in policy.target_permissions
+                    and perm.target_type in target_types
+                ]
             )
-            return {}, {}
+            for target in targets:
+                targets = [perm.target_type for perm in policy.target_permissions]
+                target_class = target if inspect.isclass(target) else target.__class__
+                if target_class in targets:
+                    policy_targets[policy].append(target)
 
-        for policy in target_class_policies[target_class]:
-            policy_targets[policy].append(target)
-
-    if (
-        policy_permissions
-        and policy_targets
-        and set(policy_permissions.keys()) != set(policy_targets.keys())
-    ):
+    handled_permissions = set(
+        reduce(operator.iconcat, [list(pp) for pp in policy_permissions.values()])
+    )
+    unhandled_permissions = set(permissions) - handled_permissions
+    if unhandled_permissions:
         warnings.warn(
-            "Mismatch policy_permissions `{}` vs policy_targets `{}`".format(
-                ", ".join(sorted([t.target_type for t in policy_permissions.keys()])),
-                ", ".join(sorted([t.target_type for t in policy_targets.keys()])),
-            ),
+            f"No targets found for permission(s): "
+            f"{', '.join([p.id for p in unhandled_permissions])}",
             stacklevel=3,
         )
         return {}, {}
 
-    unhandled_permissions = [p.id for p in permissions if p not in permission_policies]
-    if unhandled_permissions:
+    handled_targets = set(reduce(operator.iconcat, policy_targets.values()))
+
+    unhandled_targets = target_types - set(
+        [t if inspect.isclass(t) else t.__class__ for t in handled_targets]
+    )
+    if unhandled_targets:
+        target_names = [
+            t.__name__ if inspect.isclass(t) else t.__class__.__name__
+            for t in unhandled_targets
+        ]
         warnings.warn(
-            f"No policy found for permission(s): {', '.join(unhandled_permissions)}",
+            f"No policies found for target(s): " f"{', '.join(target_names)}",
             stacklevel=3,
         )
         return {}, {}

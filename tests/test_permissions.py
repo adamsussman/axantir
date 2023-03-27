@@ -94,23 +94,27 @@ def registry() -> Registry:
 def test_registry_register_permission(registry: Registry) -> None:
     perm = Permission(
         name="testperm",
-        target_type="foo",
+        target_type=Thingy,
     )
 
     assert registry.permissions_by_id.get(perm.id) == perm
-    assert registry.permissions_by_target["foo"] == set([perm])
     assert registry.get_all_permissions() == [perm]
+
+
+def test_register_permission_bad_target() -> None:
+    with pytest.raises(ValueError):
+        Permission(name="testperm", target_type="foo")
 
 
 def test_registry_double_register_permission() -> None:
     Permission(
         name="testperm",
-        target_type="foo",
+        target_type=Thingy,
     )
     with pytest.raises(ValueError) as e:
-        Permission(name="testperm", target_type="foo")
+        Permission(name="testperm", target_type=Thingy)
 
-    assert str(e.value) == "Duplicate permission `foo:testperm`"
+    assert str(e.value) == "Duplicate permission `thingy:testperm`"
 
 
 def test_registry_register_non_permission(registry: Registry) -> None:
@@ -119,45 +123,38 @@ def test_registry_register_non_permission(registry: Registry) -> None:
 
 
 def test_registry_register_policy(registry: Registry) -> None:
-    TARGET_TYPE = "test_target"
-
     PERM = Permission(
         name="testperm",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     policy = AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[str, list],
+        name="test_policy",
         target_permissions=[PERM],
     )
 
-    assert registry.policies_by_target.get(policy.target_type) == {policy}
+    assert registry.policies_by_permission.get(PERM) == {policy}
     assert registry.get_all_target_policies() == [policy]
 
 
 def test_registry_double_register_policy() -> None:
-    TARGET_TYPE = "test_target"
-
     PERM = Permission(
         name="testperm",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysDenyPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[str, list],
+        name="test_policy",
         target_permissions=[PERM],
     )
 
     with pytest.raises(ValueError) as e:
         AlwaysDenyPolicy(
-            target_type=TARGET_TYPE,
-            target_classes=[str, list],
+            name="test_policy",
             target_permissions=[PERM],
         )
 
-    assert str(e.value) == "Duplicate policy `test_target`"
+    assert str(e.value) == "Duplicate policy `thingy:testperm:test_policy`"
 
 
 def test_registry_register_non_policy(registry: Registry) -> None:
@@ -167,17 +164,14 @@ def test_registry_register_non_policy(registry: Registry) -> None:
 
 @pytest.mark.parametrize("granted", [False, True])
 def test_simple_permission_check(granted: bool) -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     policy_class = AlwaysGrantPolicy if granted else AlwaysDenyPolicy
     policy_class(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -190,24 +184,21 @@ def test_simple_permission_check(granted: bool) -> None:
 
 @pytest.mark.parametrize("granted", [False, True])
 def test_simple_sqla_filter(granted: bool) -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=ThingyModel,
     )
 
     policy_class = AlwaysGrantPolicyThingyModel if granted else AlwaysDenyPolicy
     policy_class(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
     filt = sqla_filter_for_permissions(
         security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
         permissions=[CAN_MESS_WITH_THINGY],
-        targets=[Thingy],
+        targets=[ThingyModel],
     )
     if granted:
         assert isinstance(filt, ColumnElement)
@@ -216,11 +207,9 @@ def test_simple_sqla_filter(granted: bool) -> None:
 
 
 def test_permission_context_failure() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     class Policy(TargetPolicy):
@@ -244,8 +233,7 @@ def test_permission_context_failure() -> None:
             return None
 
     Policy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -266,11 +254,9 @@ def test_permission_context_failure() -> None:
 
 @pytest.mark.filterwarnings("ignore: Permission")
 def test_permission_with_no_policy() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     with pytest.warns(UserWarning) as w:
@@ -281,10 +267,7 @@ def test_permission_with_no_policy() -> None:
         )
 
     assert len(w) == 1
-    assert (
-        str(w[0].message)
-        == "Permission `thingy:can_mess_with` has target_type with no policy: `thingy`"
-    )
+    assert str(w[0].message) == "No policy found for permission: `can_mess_with`"
 
     with pytest.warns(UserWarning) as w:
         assert (
@@ -299,24 +282,18 @@ def test_permission_with_no_policy() -> None:
         )
 
     assert len(w) == 1
-    assert (
-        str(w[0].message)
-        == "Permission `thingy:can_mess_with` has target_type with no policy: `thingy`"
-    )
+    assert str(w[0].message) == "No policy found for permission: `can_mess_with`"
 
 
 @pytest.mark.filterwarnings("ignore: No permission requested has a policy")
 def test_permission_with_unknown_target_classes() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicyThingyModel(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -328,8 +305,7 @@ def test_permission_with_unknown_target_classes() -> None:
         )
     assert len(w) == 1
     assert (
-        str(w[0].message)
-        == "No permission requested has a policy for target class `str`"
+        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
     )
 
     with pytest.warns(UserWarning) as w:
@@ -346,8 +322,7 @@ def test_permission_with_unknown_target_classes() -> None:
 
     assert len(w) == 2
     assert (
-        str(w[0].message)
-        == "No permission requested has a policy for target class `str`"
+        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
     )
     assert (
         str(w[1].message)
@@ -355,21 +330,18 @@ def test_permission_with_unknown_target_classes() -> None:
     )
 
 
-@pytest.mark.filterwarnings("ignore: No permission requested has a policy")
+@pytest.mark.filterwarnings("ignore: No targets found for permission")
 def test_permissions_mismatch_target() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     class OtherThing(object):
         ...
 
     AlwaysGrantPolicyThingyModel(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -390,51 +362,59 @@ def test_permissions_mismatch_target() -> None:
 
 
 def test_permissions_no_targets() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicyThingyModel(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
-    assert not has_permissions(
-        security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
-        permissions=[CAN_MESS_WITH_THINGY],
-        targets=[],
-    )
-
-    assert (
-        sqla_filter_for_permissions(
+    with pytest.warns(UserWarning) as w:
+        assert not has_permissions(
             security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[],
         )
-        is None
+
+    assert len(w) == 1
+    assert (
+        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
+    )
+
+    with pytest.warns(UserWarning) as w:
+        assert (
+            sqla_filter_for_permissions(
+                security_context=Context(
+                    origin=ContextOriginEnum.internal, scopes=["*"]
+                ),
+                permissions=[CAN_MESS_WITH_THINGY],
+                targets=[],
+            )
+            is None
+        )
+
+    assert len(w) == 1
+    assert (
+        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
     )
 
 
 def test_no_policy_for_permission() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     CAN_DO_OTHER_THING = Permission(
         name="do_whatever",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -446,10 +426,7 @@ def test_no_policy_for_permission() -> None:
         )
 
     assert len(w) == 1
-    assert (
-        str(w[0].message)
-        == "No permission requested has a policy for target class `Thingy`"
-    )
+    assert str(w[0].message) == "No policy found for permission: `do_whatever`"
 
     with pytest.warns(UserWarning) as w:
         assert (
@@ -464,34 +441,67 @@ def test_no_policy_for_permission() -> None:
         )
 
     assert len(w) == 1
-    assert (
-        str(w[0].message)
-        == "No permission requested has a policy for target class `Thingy`"
+    assert str(w[0].message) == "No policy found for permission: `do_whatever`"
+
+
+def test_no_policy_for_target() -> None:
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=Thingy,
     )
+
+    AlwaysGrantPolicy(
+        name="test_policy",
+        target_permissions=[CAN_MESS_WITH_THINGY],
+    )
+
+    class Thingy2(object):
+        pass
+
+    with pytest.warns(UserWarning) as w:
+        assert not has_permissions(
+            security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy(), Thingy2()],
+        )
+
+    assert len(w) == 1
+    assert str(w[0].message) == "No policies found for target(s): Thingy2"
+
+    with pytest.warns(UserWarning) as w:
+        assert (
+            sqla_filter_for_permissions(
+                security_context=Context(
+                    origin=ContextOriginEnum.internal, scopes=["*"]
+                ),
+                permissions=[CAN_MESS_WITH_THINGY],
+                targets=[Thingy, Thingy2],
+            )
+            is None
+        )
+
+    assert len(w) == 1
+    assert str(w[0].message) == "No policies found for target(s): Thingy2"
 
 
 def test_multiple_policies_for_target() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     CAN_DO_OTHER_THING = Permission(
         name="do_whatever",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy1",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
     AlwaysDenyPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy2",
         target_permissions=[CAN_DO_OTHER_THING],
     )
 
@@ -542,27 +552,23 @@ def test_multiple_policies_for_target() -> None:
 
 
 def test_multiple_policies_for_target_with_overlap() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     CAN_DO_OTHER_THING = Permission(
         name="do_whatever",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy1",
         target_permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
     )
 
     AlwaysDenyPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy2",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -613,16 +619,13 @@ def test_multiple_policies_for_target_with_overlap() -> None:
 
 
 def test_sqla_filter_on_instances() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy1",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
@@ -640,40 +643,19 @@ def test_sqla_filter_on_instances() -> None:
     )
 
 
-def test_policy_target_mismatch() -> None:
-    TARGET_TYPE = "thingy"
-
-    CAN_MESS_WITH_THINGY = Permission(
-        name="can_mess_with",
-        target_type=TARGET_TYPE,
-    )
-
-    with pytest.raises(Exception) as e:
-        AlwaysGrantPolicy(
-            target_type="foo",
-            target_classes=[Thingy],
-            target_permissions=[CAN_MESS_WITH_THINGY],
-        )
-
-    assert "does not match the policy target type" in str(e.value)
-
-
 def test_scopes_mismatch() -> None:
-    TARGET_TYPE = "thingy"
-
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     CAN_DO_OTHER_THING = Permission(
         name="do_whatever",
-        target_type=TARGET_TYPE,
+        target_type=Thingy,
     )
 
     AlwaysGrantPolicy(
-        target_type=TARGET_TYPE,
-        target_classes=[Thingy],
+        name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
     )
 

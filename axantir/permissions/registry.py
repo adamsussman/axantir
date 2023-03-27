@@ -6,18 +6,16 @@ from .models import Permission, TargetPolicy
 
 class Registry(object):
     permissions_by_id: Dict[str, Permission]
-    permissions_by_target: Dict[str, Set[Permission]]
     policies_by_id: Dict[str, TargetPolicy]
-    policies_by_target: Dict[str, Set[TargetPolicy]]
+    policies_by_permission: Dict[Permission, Set[TargetPolicy]]
 
     def __init__(self) -> None:
         self.clear()
 
     def clear(self) -> None:
         self.permissions_by_id = {}
-        self.permissions_by_target = defaultdict(set)
         self.policies_by_id = {}
-        self.policies_by_target = defaultdict(set)
+        self.policies_by_permission = defaultdict(set)
 
     def register_permission(self, permission: Permission) -> None:
         if not isinstance(permission, Permission):
@@ -27,7 +25,6 @@ class Registry(object):
             raise ValueError(f"Duplicate permission `{permission.id}`")
 
         self.permissions_by_id[permission.id] = permission
-        self.permissions_by_target[permission.target_type].add(permission)
 
     def register_target_policy(self, policy: TargetPolicy) -> None:
         if not isinstance(policy, TargetPolicy):
@@ -36,10 +33,11 @@ class Registry(object):
             )
 
         if policy.id in self.policies_by_id:
-            raise ValueError(f"Duplicate policy `{policy.target_type}`")
+            raise ValueError(f"Duplicate policy `{policy.id}`")
 
         self.policies_by_id[policy.id] = policy
-        self.policies_by_target[policy.target_type].add(policy)
+        for permission in policy.target_permissions:
+            self.policies_by_permission[permission].add(policy)
 
     def get_all_permissions(self) -> List[Permission]:
         return sorted(self.permissions_by_id.values(), key=lambda p: p.id)

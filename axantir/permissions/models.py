@@ -1,7 +1,9 @@
 import abc
-from typing import TYPE_CHECKING, Any, List, Optional, Type
+import inspect
+import re
+from typing import TYPE_CHECKING, Any, List, Optional
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, validator
 from sqlalchemy.sql.elements import ColumnElement
 
 from ..context import SecurityContext
@@ -18,38 +20,44 @@ def get_registry() -> "Registry":  # pragma: no cover
     return registry
 
 
+def slugify(value: str) -> str:
+    value = re.sub(r"([a-z])([A-Z])", r"\1_\2", value).lower()
+    value = re.sub(r"[^\w\d_]", "", value)
+    return value
+
+
 class Permission(BaseModel):
     name: IdSlug
-    target_type: IdSlug
+    target_type: Any
     description: Optional[str] = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         get_registry().register_permission(self)
 
+    @validator("target_type")
+    def validate_target_type(cls, value: Any) -> Any:
+        if not inspect.isclass(value):
+            raise ValueError("must be a class")
+
+        return value
+
     @property
     def id(self) -> str:
-        return ":".join([self.target_type, self.name])
+        return ":".join([self.target_slug, self.name])
+
+    @property
+    def target_slug(self) -> str:
+        return slugify(self.target_type.__name__)
 
     def __hash__(self) -> int:
         return hash(self.id)
 
 
 class TargetPolicy(BaseModel, abc.ABC):
-    target_type: IdSlug
-    target_classes: List[Type] = Field(min_items=1)
+    name: IdSlug
     target_permissions: List[Permission] = Field(min_items=1)
-
-    @root_validator
-    def validate_targets(cls, values: dict) -> dict:
-        for permission in values.get("target_permissions", []):
-            if values.get("target_type") != permission.target_type:
-                raise ValueError(
-                    f"permission `{permission.name}`'s target type does not "
-                    "match the policy target type"
-                )
-
-        return values
+    description: Optional[str] = None
 
     @abc.abstractmethod
     def has_permissions(
@@ -77,10 +85,7 @@ class TargetPolicy(BaseModel, abc.ABC):
     @property
     def id(self) -> str:
         return ":".join(
-            [
-                self.target_type,
-                "/".join(sorted([p.id for p in self.target_permissions])),
-            ]
+            ["/".join(sorted([p.id for p in self.target_permissions])), self.name]
         )
 
     def __hash__(self) -> int:
