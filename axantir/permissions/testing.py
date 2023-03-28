@@ -1,10 +1,27 @@
 # Usage:
 #
 # in one of your test files add:
+#
+#    # It is important that the permissions be imported before the tests, so you may need to
+#    # tweak isort
+#
+#    # isort: skip_file
+#
+#    import my_app.permissions1
+#    import my_app.permissions2
+#    etc...
+#
 #    from axantir.permissions.testing import *  # noqa: F401,F403
+#
+# It is recommended to set the pytest ini: `empty_parameter_set_mark` to `fail_at_collect`:
+#
+#    setup.cfg:
+#        [tool:pytest]
+#        empty_parameter_set_mark = fail_at_collect
 #
 # or, if you just need a clean registry fixture:
 #    from axantir.permissions.testing import clean_permission_registry
+#
 
 from typing import Generator
 
