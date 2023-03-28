@@ -9,15 +9,6 @@ from .schemas import AuditActionSpec, AuditHeaderBase
 EXTENSION_KEY = "audit_logger"
 
 
-def get_audit_logger() -> AuditLogger:
-    from flask import current_app
-
-    if current_app and EXTENSION_KEY in current_app.extensions:
-        return current_app.extensions[EXTENSION_KEY]
-
-    return AuditLogger(emitters=[EmitterLog()])
-
-
 class FlaskAuditLogger(object):
     audit_logger: AuditLogger
 
@@ -41,3 +32,12 @@ class FlaskAuditLogger(object):
 
     def emit_action(self, action: AuditActionSpec, *context_objects: Any) -> None:
         self.audit_logger.emit_action(action, *context_objects)
+
+
+def get_audit_logger() -> FlaskAuditLogger:
+    from flask import current_app
+
+    if current_app and EXTENSION_KEY in current_app.extensions:
+        return current_app.extensions[EXTENSION_KEY]
+
+    return FlaskAuditLogger(AuditLogger(emitters=[EmitterLog()]))
