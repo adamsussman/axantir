@@ -70,7 +70,7 @@ def test_emit_with_dict_context(caplog: pytest.LogCaptureFixture) -> None:
         name="my_action",
         version="1.0.0",
         context_objects=[
-            {"object_path": "dict", "includes": ["attribute1", "attribute3"]}
+            {"object_class": dict, "includes": ["attribute1", "attribute3"]}
         ],
     )
 
@@ -105,14 +105,19 @@ def test_warning_missing_context_objs(caplog: pytest.LogCaptureFixture) -> None:
     class MyContextObject(BaseModel):
         attribute1: str
 
+    class Bar:
+        a: str
+        b: str
+        c: str
+
     my_action = AuditActionSpec(
         name="my_action",
         version="1.0.0",
         context_objects=[
-            {"object_path": "foo.bar", "includes": ["a", "b", "c"]},
-            {"object_path": "dict", "includes": ["a", "b", "c"]},
+            {"object_class": Bar, "includes": ["a", "b", "c"]},
+            {"object_class": dict, "includes": ["a", "b", "c"]},
             {
-                "object_path": "test_audit_log.MyContextObject",
+                "object_class": MyContextObject,
                 "includes": ["attribute1"],
             },
         ],
@@ -137,7 +142,7 @@ def test_warning_missing_context_objs(caplog: pytest.LogCaptureFixture) -> None:
     assert len(warns) == 1
     assert (
         "AuditLogger: `my_action:1.0.0` action was missing context items: "
-        "expected object(s): dict, foo.bar" in warns[0]
+        "expected object(s): dict, test_audit_log.Bar" in warns[0]
     )
 
 
@@ -151,9 +156,9 @@ def test_warning_missing_context_obj_keys(caplog: pytest.LogCaptureFixture) -> N
         name="my_action",
         version="1.0.0",
         context_objects=[
-            {"object_path": "dict", "includes": ["a", "b", "c", "d"]},
+            {"object_class": dict, "includes": ["a", "b", "c", "d"]},
             {
-                "object_path": "test_audit_log.MyContextObject",
+                "object_class": MyContextObject,
                 "includes": ["attribute1"],
             },
         ],
@@ -196,12 +201,12 @@ def test_warning_missing_context_obj_keys_nullable(
         version="1.0.0",
         context_objects=[
             {
-                "object_path": "dict",
+                "object_class": dict,
                 "includes": ["a", "b", "c", "d"],
                 "nullable": ["d"],
             },
             {
-                "object_path": "test_audit_log.MyContextObject",
+                "object_class": MyContextObject,
                 "includes": ["attribute1", "attribute2"],
                 "nullable": ["attribute2"],
             },

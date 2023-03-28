@@ -1,4 +1,5 @@
 from collections import defaultdict
+from inspect import isclass
 from logging import getLogger
 from typing import Any, Dict, Set
 
@@ -18,17 +19,21 @@ def dotted_getattr(obj: Any, key: str) -> Any:
 
 
 def fully_qualified_class_name(obj: Any) -> str:
-    if obj.__class__.__module__ == "builtins":
-        return obj.__class__.__name__
+    if not isclass(obj):
+        obj = obj.__class__
 
-    return ".".join([obj.__class__.__module__, obj.__class__.__name__])
+    if obj.__module__ == "builtins":
+        return obj.__name__
+
+    return ".".join([obj.__module__, obj.__name__])
 
 
 def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> Dict:
     body = {}
 
     context_specs_by_fqcn: Dict[str, ContextObjectFieldSpec] = {
-        c.object_path: c for c in action.context_objects or []
+        fully_qualified_class_name(c.object_class): c
+        for c in action.context_objects or []
     }
 
     seen_objects: Set[str] = set()

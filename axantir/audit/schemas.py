@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,7 @@ class AuditHeaderBase(BaseModel):
 
 
 class ContextObjectFieldSpec(BaseModel):
-    object_path: str
+    object_class: Type
     includes: List[str]
     nullable: List[str] = Field(default_factory=list)
 
