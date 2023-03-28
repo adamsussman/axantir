@@ -11,13 +11,13 @@ class AuditLogger(object):
     def __init__(
         self,
         emitters: List[Emitter],
-        header_class: Optional[Type[AuditHeaderBase]] = AuditHeaderBase,
+        header_class: Optional[Type[AuditHeaderBase]] = None,
         exception_logger_name: Optional[str] = None,
     ) -> None:
         if not emitters or not all([isinstance(e, Emitter) for e in emitters]):
             raise Exception("Emitters required")
 
-        self.header_class = header_class
+        self.header_class = header_class or AuditHeaderBase
         self.emitters = emitters
         self.exception_logger_name = exception_logger_name
 
