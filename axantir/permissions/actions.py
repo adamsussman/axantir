@@ -169,7 +169,9 @@ def _get_policy_groups(
 def _validate_target_classes(
     target_objects: List[Any], target_classes: List[Type]
 ) -> bool:
-    return set([t.__class__ for t in target_objects]) == set(target_classes)
+    return set(
+        [t if inspect.isclass(t) else t.__class__ for t in target_objects]
+    ) == set(target_classes)
 
 
 def _filter_permissions_by_scopes(
