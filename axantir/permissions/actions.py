@@ -5,7 +5,10 @@ from collections import defaultdict
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type
 
-from sqlalchemy.sql.elements import ColumnElement
+try:
+    from sqlalchemy.sql.elements import ColumnElement
+except ImportError:
+    ColumnElement = Type[object]  # type: ignore
 
 from ..context import SecurityContext
 from .models import Permission, TargetPolicy

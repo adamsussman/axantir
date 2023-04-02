@@ -1,10 +1,14 @@
 import abc
 import inspect
 import re
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Type
 
 from pydantic import BaseModel, Field, validator
-from sqlalchemy.sql.elements import ColumnElement
+
+try:
+    from sqlalchemy.sql.elements import ColumnElement
+except ImportError:
+    ColumnElement = Type[object]  # type: ignore
 
 from ..context import SecurityContext
 from ..fields import IdSlug
