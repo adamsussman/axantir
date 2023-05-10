@@ -1,7 +1,7 @@
-from typing import Any, List, Optional
+from typing import Any, List
 
 import pytest
-from sqlalchemy import String
+from sqlalchemy import String, false, true
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -39,8 +39,8 @@ class AlwaysGrantPolicy(TargetPolicy):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> Optional[ColumnElement]:
-        return True  # type: ignore
+    ) -> ColumnElement:
+        return true()
 
 
 class AlwaysGrantPolicyThingyModel(TargetPolicy):
@@ -57,7 +57,7 @@ class AlwaysGrantPolicyThingyModel(TargetPolicy):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> Optional[ColumnElement]:
+    ) -> ColumnElement:
         return ThingyModel.field1 == "foo"
 
 
@@ -75,8 +75,8 @@ class AlwaysDenyPolicy(TargetPolicy):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> Optional[ColumnElement]:
-        return None
+    ) -> ColumnElement:
+        return false()
 
 
 class Context(SecurityContext):
@@ -203,7 +203,7 @@ def test_simple_sqla_filter(granted: bool) -> None:
     if granted:
         assert isinstance(filt, ColumnElement)
     else:
-        assert filt is None
+        assert filt == false()
 
 
 def test_permission_context_failure() -> None:
@@ -226,11 +226,11 @@ def test_permission_context_failure() -> None:
             security_context: SecurityContext,
             permissions: List[Permission],
             targets: List[Any],
-        ) -> Optional[ColumnElement]:
+        ) -> ColumnElement:
             if security_context.user.is_someone_special:
-                return None
+                return true()
 
-            return None
+            return false()
 
     Policy(
         name="test_policy",
@@ -278,7 +278,7 @@ def test_permission_with_no_policy() -> None:
                 permissions=[CAN_MESS_WITH_THINGY],
                 targets=[Thingy],
             )
-            is None
+            == false()
         )
 
     assert len(w) == 1
@@ -317,7 +317,7 @@ def test_permission_with_unknown_target_classes() -> None:
                 permissions=[CAN_MESS_WITH_THINGY],
                 targets=["foo"],
             )
-            is None
+            == false()
         )
 
     assert len(w) == 2
@@ -357,7 +357,7 @@ def test_permissions_mismatch_target() -> None:
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[OtherThing],
         )
-        is None
+        == false()
     )
 
 
@@ -393,7 +393,7 @@ def test_permissions_no_targets() -> None:
                 permissions=[CAN_MESS_WITH_THINGY],
                 targets=[],
             )
-            is None
+            == false()
         )
 
     assert len(w) == 1
@@ -437,7 +437,7 @@ def test_no_policy_for_permission() -> None:
                 permissions=[CAN_DO_OTHER_THING],
                 targets=[Thingy],
             )
-            is None
+            == false()
         )
 
     assert len(w) == 1
@@ -477,7 +477,7 @@ def test_no_policy_for_target() -> None:
                 permissions=[CAN_MESS_WITH_THINGY],
                 targets=[Thingy, Thingy2],
             )
-            is None
+            == false()
         )
 
     assert len(w) == 1
@@ -529,7 +529,7 @@ def test_multiple_policies_for_target() -> None:
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[Thingy],
         )
-        is not None
+        == true()
     )
 
     assert (
@@ -538,7 +538,7 @@ def test_multiple_policies_for_target() -> None:
             permissions=[CAN_DO_OTHER_THING],
             targets=[Thingy],
         )
-        is None
+        == false()
     )
 
     assert (
@@ -547,7 +547,7 @@ def test_multiple_policies_for_target() -> None:
             permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
             targets=[Thingy],
         )
-        is None
+        == false()
     )
 
 
@@ -596,7 +596,7 @@ def test_multiple_policies_for_target_with_overlap() -> None:
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[Thingy],
         )
-        is None
+        == false()
     )
 
     assert (
@@ -605,7 +605,7 @@ def test_multiple_policies_for_target_with_overlap() -> None:
             permissions=[CAN_DO_OTHER_THING],
             targets=[Thingy],
         )
-        is not None
+        == true()
     )
 
     assert (
@@ -614,7 +614,7 @@ def test_multiple_policies_for_target_with_overlap() -> None:
             permissions=[CAN_MESS_WITH_THINGY, CAN_DO_OTHER_THING],
             targets=[Thingy],
         )
-        is None
+        == false()
     )
 
 
@@ -675,7 +675,7 @@ def test_scopes_mismatch() -> None:
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[Thingy()],
         )
-        is None
+        == false()
     )
 
 

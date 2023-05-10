@@ -78,7 +78,14 @@ class TargetPolicy(BaseModel, abc.ABC):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> Optional[ColumnElement]:
+    ) -> ColumnElement:
+        """
+        Return where clause filter.
+
+        For a no-op sql that always succeeds, return sqlalchemy.true()
+
+        For a no-op sql that always fails (yields no rows), return sqlalchemy.false()
+        """
         ...  # pragma: no cover
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

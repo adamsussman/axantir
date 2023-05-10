@@ -3,7 +3,7 @@ import operator
 import warnings
 from collections import defaultdict
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Type
 
 try:
     from sqlalchemy.sql.elements import ColumnElement
@@ -68,12 +68,14 @@ def sqla_filter_for_permissions(
     security_context: SecurityContext,
     permissions: List[Permission],
     targets: List[Any],
-) -> Optional[ColumnElement]:
+) -> ColumnElement:
+    from sqlalchemy import False_, false
+
     permissions = _filter_permissions_by_scopes(
         scopes=security_context.scopes, permissions=permissions
     )
     if not permissions:
-        return None
+        return false()
 
     policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
 
@@ -84,24 +86,32 @@ def sqla_filter_for_permissions(
                 stacklevel=3,
             )
 
-    if (
-        policy_permissions
-        and policy_targets
-        and (
-            clauses := [
-                policy.sqla_filter_for_permissions(
-                    security_context=security_context,
-                    permissions=list(policy_permissions[policy]),
-                    targets=policy_targets[policy],
-                )
-                for policy in policy_targets.keys()
-            ]
-        )
-        and not any([True for c in clauses if c is None])
-    ):
+    if policy_permissions and policy_targets:
+        clauses = []
+
+        for policy in policy_targets.keys():
+            clause = policy.sqla_filter_for_permissions(
+                security_context=security_context,
+                permissions=list(policy_permissions[policy]),
+                targets=policy_targets[policy],
+            )
+            if clause is None:
+                raise Exception(f"policy {policy.id} returned sqla_filter None")
+            clauses.append(clause)
+
+        if len(clauses) == 0:
+            raise Exception(f"policy {policy.id} returned zero sqla_filters")
+
+        elif len(clauses) == 1:
+            return clauses[0]
+
+        elif any([True for clause in clauses if isinstance(clause, False_)]):
+            # Any one False noop kills the rest, so reduce
+            return false()
+
         return reduce(operator.and_, clauses)
 
-    return None
+    return false()
 
 
 def _get_policy_groups(
