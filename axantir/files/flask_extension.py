@@ -29,11 +29,9 @@ class FlaskFileStore(object):
             and (settings := current_app.config["FILES_STORE_SETTINGS"].get(name, None))
         ):
             storage_class = werkzeug.utils.import_string(settings["class"])
-            filestore = storage_class(
-                **settings.get("kwargs", {})
-            )
+            filestore = storage_class(**settings.get("kwargs", {}))
             if not hasattr(app_ctx, "axantir_file_store"):
-                app_ctx.axantir_file_store = {}
+                app_ctx.axantir_file_store = {}  # type: ignore
 
             app_ctx.axantir_file_store[name] = filestore  # type: ignore
 
