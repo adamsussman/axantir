@@ -287,6 +287,7 @@ class FileStoreS3(FileStoreBase):
         aws_secret_access_key: Optional[str] = None,
         endpoint_url: Optional[str] = None,
         enable_remote_x_accel: bool = False,
+        key_prefix: Optional[str] = None,
     ):
         self.s3_client = boto3.client(
             "s3",
@@ -300,9 +301,16 @@ class FileStoreS3(FileStoreBase):
         )
         self.s3_bucket_name = s3_bucket_name
         self.enable_remote_x_accel = enable_remote_x_accel
+        self.key_prefix = key_prefix
 
     def key_root(self, file_id: uuid.UUID) -> str:
-        return "/".join(split_uuid_for_path(file_id))
+        path_elements = []
+        if self.key_prefix:
+            path_elements.append(self.key_prefix)
+
+        path_elements.extend(split_uuid_for_path(file_id))
+
+        return "/".join(path_elements)
 
     def key_for_file(self, file_object: File) -> str:
         return "/".join(
