@@ -19,7 +19,7 @@ class FlaskFileStore(object):
         if (
             app_ctx is not None
             and (filestores := getattr(app_ctx, "axantir_file_store", None))
-            and (filestore := getattr(filestores, name, None))
+            and (filestore := filestores.get(name))
         ):
             return filestore
 
