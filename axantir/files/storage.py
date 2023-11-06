@@ -171,7 +171,7 @@ class FileStoreLocalDirectory(FileStoreBase):
         path = self._get_metadata_path(file_object)
         os.makedirs(os.path.split(path)[0], exist_ok=True)
         with open(path, "w") as fh:
-            fh.write(file_object.json())
+            fh.write(file_object.model_dump_json())
 
         return file_object
 
@@ -350,7 +350,7 @@ class FileStoreS3(FileStoreBase):
     def _save_file_metadata(self, file_object: File) -> File:
         key = self.key_for_metadata(file_object.file_id)
 
-        content = file_object.json()
+        content = file_object.model_dump_json()
         self.s3_client.put_object(
             ACL="private",
             Body=content,

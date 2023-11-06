@@ -3,7 +3,7 @@ import inspect
 import re
 from typing import TYPE_CHECKING, Any, List, Optional, Type
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 try:
     from sqlalchemy.sql.elements import ColumnElement
@@ -39,7 +39,8 @@ class Permission(BaseModel):
         super().__init__(*args, **kwargs)
         get_registry().register_permission(self)
 
-    @validator("target_type")
+    @field_validator("target_type")
+    @classmethod
     def validate_target_type(cls, value: Any) -> Any:
         if not inspect.isclass(value):
             raise ValueError("must be a class")
@@ -60,7 +61,7 @@ class Permission(BaseModel):
 
 class TargetPolicy(BaseModel, abc.ABC):
     name: IdSlug
-    target_permissions: List[Permission] = Field(min_items=1)
+    target_permissions: List[Permission] = Field(min_length=1)
     description: Optional[str] = None
 
     @abc.abstractmethod
