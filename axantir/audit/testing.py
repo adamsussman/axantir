@@ -32,7 +32,7 @@ class FixtureEmitter(Emitter):
         self.records = []
 
     def emit(self, event: AuditEvent) -> None:
-        self.records.append(event.dict())
+        self.records.append(event.model_dump())
 
 
 class AuditLogFixture(object):

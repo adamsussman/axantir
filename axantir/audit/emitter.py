@@ -18,7 +18,9 @@ class EmitterLog(Emitter):
         self.logger_name = logger_name
 
     def emit(self, event: AuditEvent) -> None:
-        message = json.dumps(event.dict(), cls=SubsecondJSONEncoder, sort_keys=True)
+        message = json.dumps(
+            event.model_dump(), cls=SubsecondJSONEncoder, sort_keys=True
+        )
         getLogger(self.logger_name).info(message)
 
 

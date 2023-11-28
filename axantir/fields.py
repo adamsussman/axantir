@@ -1,20 +1,24 @@
 import re
-from typing import Callable, Generator
+from typing import Any
 
 import semver
+from pydantic import GetCoreSchemaHandler
+from pydantic_core import CoreSchema, core_schema
 
 SLUG_RE = r"^[a-z0-9_-]{3,}$"
 
 
 class IdSlug(str):
     @classmethod
-    def __get_validators__(cls) -> Generator[Callable, None, None]:
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        return core_schema.no_info_plain_validator_function(cls.validate)
 
     @classmethod
     def validate(cls, value: str) -> str:
         if not isinstance(value, str):
-            raise TypeError("string required")
+            raise ValueError("string required")
 
         if not value:
             raise ValueError("value must not be None")
@@ -32,13 +36,15 @@ class IdSlug(str):
 
 class SemVer(str):
     @classmethod
-    def __get_validators__(cls) -> Generator[Callable, None, None]:
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        return core_schema.no_info_plain_validator_function(cls.validate)
 
     @classmethod
     def validate(cls, value: str) -> str:
         if not isinstance(value, str):
-            raise TypeError("string required")
+            raise ValueError("string required")
 
         semver.VersionInfo.parse(value)
         return value

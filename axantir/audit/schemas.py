@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Dict, List, Optional, Type
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..fields import IdSlug, SemVer
 
@@ -14,8 +14,7 @@ class AuditHeaderBase(BaseModel):
     timestamp: datetime.datetime = Field(default_factory=utcnow)
     actor: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
 
 class ContextObjectFieldSpec(BaseModel):
@@ -23,19 +22,16 @@ class ContextObjectFieldSpec(BaseModel):
     includes: List[str]
     nullable: List[str] = Field(default_factory=list)
 
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
 
 class AuditActionSpec(BaseModel):
     version: SemVer
     name: IdSlug
 
-    context_objects: Optional[List[ContextObjectFieldSpec]]
+    context_objects: Optional[List[ContextObjectFieldSpec]] = None
 
-    class Config:
-        allow_mutation = False
-        extra = "forbid"
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         from .registry import registry
@@ -48,15 +44,14 @@ class AuditAction(BaseModel):
     version: SemVer
     name: IdSlug
 
-    class Config:
-        extra = "allow"
-        allow_mutation = False
+    model_config = ConfigDict(extra="allow", frozen=True)
 
 
 class AuditEvent(BaseModel):
-    version: SemVer = Field(const=True, default=SemVer("1.0.0"))
-    header: AuditHeaderBase = Field(default_factory=lambda: AuditHeaderBase())
+    version: SemVer = SemVer("1.0.0")
+    header: AuditHeaderBase | Type[AuditHeaderBase] = Field(
+        default_factory=lambda: AuditHeaderBase()
+    )
     action: AuditAction
 
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)

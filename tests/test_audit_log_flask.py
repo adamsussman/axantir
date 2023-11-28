@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 import pytest
 from flask import Flask, Response, g, make_response, request
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from axantir.audit import AuditActionSpec, AuditHeaderBase
 from axantir.audit.flask import FlaskAuditLogger
@@ -28,7 +28,7 @@ class FlaskSecurityContext(SecurityContext):
     user_id: str
 
     def audit_data(self) -> dict:
-        return self.dict()
+        return self.model_dump()
 
 
 class FlaskAuditHeader(AuditHeaderBase):
@@ -36,8 +36,7 @@ class FlaskAuditHeader(AuditHeaderBase):
     session_id: Optional[str] = Field(default_factory=get_session_id)
     actor: Dict[str, Any] = Field(default_factory=get_security_context)
 
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
 
 def test_flask_header_values(

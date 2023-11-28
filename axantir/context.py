@@ -2,7 +2,7 @@ import abc
 import typing
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .exceptions import BadSecurityContextExpectation
 
@@ -16,10 +16,9 @@ class ContextOriginEnum(str, Enum):
 
 class SecurityContext(BaseModel, abc.ABC):
     origin: ContextOriginEnum
-    scopes: typing.List[str] = Field(min_items=1, exclude=True)
+    scopes: typing.List[str] = Field(min_length=1, exclude=True)
 
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     @abc.abstractmethod
     def audit_data(self) -> dict:  # pragma: nocover
@@ -41,6 +40,6 @@ class AdminSecurityContext(SecurityContext):
     admin_identity: str
 
     def audit_data(self) -> dict:
-        data = self.dict()
+        data = self.model_dump()
         data["is_admin"] = True
         return data
