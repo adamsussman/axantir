@@ -11,7 +11,7 @@ BINARY_CONTENT_TYPE = Union[
 
 
 def utcnow() -> datetime.datetime:
-    return datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 class File(BaseModel):
