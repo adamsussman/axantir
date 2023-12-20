@@ -127,12 +127,14 @@ class FileStoreLocalDirectory(FileStoreBase):
     def __init__(self, root_directory: str) -> None:
         self.root_directory = root_directory
 
-    def _get_content_path(self, file_object: File) -> str:
-        root = os.path.join(
+    def _get_content_dirname(self, file_object: File) -> str:
+        return os.path.join(
             self.root_directory,
             *split_uuid_for_path(file_object.file_id),
         )
 
+    def _get_content_path(self, file_object: File) -> str:
+        root = self._get_content_dirname(file_object)
         file_path = os.path.join(
             root,
             f"{file_object.file_id.hex}{file_object.extension or ''}",
@@ -187,10 +189,7 @@ class FileStoreLocalDirectory(FileStoreBase):
 
     def get_file(self, file_id: uuid.UUID) -> Optional[File]:
         # since we don't know extension, we have to go looking
-        root = os.path.join(
-            self.root_directory,
-            *split_uuid_for_path(file_id),
-        )
+        root = self._get_content_dirname(File(file_id=file_id, name=""))
         candidates = glob(f"{root}/{file_id.hex}*.__meta__")
         if not candidates:
             return None
