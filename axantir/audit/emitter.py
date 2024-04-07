@@ -9,8 +9,7 @@ from .schemas import AuditEvent
 
 class Emitter(abc.ABC):
     @abc.abstractmethod
-    def emit(self, event: AuditEvent) -> None:
-        ...
+    def emit(self, event: AuditEvent) -> None: ...
 
 
 class EmitterLog(Emitter):
