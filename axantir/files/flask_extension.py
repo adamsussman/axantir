@@ -37,4 +37,6 @@ class FlaskFileStore(object):
 
             return filestore
 
-        raise Exception("No `filestore` configured on the current application")
+        raise Exception(
+            f"No filestore named `{name}` configured on the current application"
+        )
