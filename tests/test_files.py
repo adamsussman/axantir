@@ -59,7 +59,7 @@ def aws_credentials() -> None:
 
 @pytest.fixture(scope="module")
 def aws_s3_client(aws_credentials: None) -> botocore.client.BaseClient:
-    with moto.mock_s3():
+    with moto.mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
         client.create_bucket(Bucket="pytest")
 
