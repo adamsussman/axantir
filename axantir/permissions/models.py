@@ -62,6 +62,7 @@ class Permission(BaseModel):
 class TargetPolicy(BaseModel, abc.ABC):
     name: IdSlug
     target_permissions: List[Permission] = Field(min_length=1)
+    context_types: Optional[List[Type[SecurityContext]]] = None
     description: Optional[str] = None
 
     @abc.abstractmethod
@@ -70,8 +71,7 @@ class TargetPolicy(BaseModel, abc.ABC):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> bool:
-        ...  # pragma: no cover
+    ) -> bool: ...  # pragma: no cover
 
     @abc.abstractmethod
     def sqla_filter_for_permissions(

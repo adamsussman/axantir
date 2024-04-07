@@ -1,6 +1,8 @@
+import logging
 from typing import Any, List
 
 import pytest
+from pytest import LogCaptureFixture
 from sqlalchemy import String, false, true
 from sqlalchemy.orm import DeclarativeBase, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
@@ -206,33 +208,34 @@ def test_simple_sqla_filter(granted: bool) -> None:
         assert filt == false()
 
 
+class SpecialPolicy(TargetPolicy):
+    def has_permissions(
+        self,
+        security_context: SecurityContext,
+        permissions: List[Permission],
+        targets: List[Any],
+    ) -> bool:
+        return security_context.user.is_someone_special
+
+    def sqla_filter_for_permissions(
+        self,
+        security_context: SecurityContext,
+        permissions: List[Permission],
+        targets: List[Any],
+    ) -> ColumnElement:
+        if security_context.user.is_someone_special:
+            return true()
+
+        return false()
+
+
 def test_permission_context_failure() -> None:
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
         target_type=Thingy,
     )
 
-    class Policy(TargetPolicy):
-        def has_permissions(
-            self,
-            security_context: SecurityContext,
-            permissions: List[Permission],
-            targets: List[Any],
-        ) -> bool:
-            return security_context.user.is_someone_special
-
-        def sqla_filter_for_permissions(
-            self,
-            security_context: SecurityContext,
-            permissions: List[Permission],
-            targets: List[Any],
-        ) -> ColumnElement:
-            if security_context.user.is_someone_special:
-                return true()
-
-            return false()
-
-    Policy(
+    SpecialPolicy(
         name="test_policy",
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
@@ -286,7 +289,10 @@ def test_permission_with_no_policy() -> None:
 
 
 @pytest.mark.filterwarnings("ignore: No permission requested has a policy")
-def test_permission_with_unknown_target_classes() -> None:
+def test_permission_with_unknown_target_classes(caplog: LogCaptureFixture) -> None:
+    logger = logging.getLogger("axantir.permissions.actions")
+    logger.setLevel(logging.DEBUG)
+
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
         target_type=Thingy,
@@ -297,36 +303,32 @@ def test_permission_with_unknown_target_classes() -> None:
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
-    with pytest.warns(UserWarning) as w:
-        assert not has_permissions(
+    assert not has_permissions(
+        security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_MESS_WITH_THINGY],
+        targets=["foo"],
+    )
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].msg == (
+        "No policies found for permission(s): thingy:can_mess_with, "
+        "for context test_permissions.Context"
+    )
+    caplog.clear()
+
+    assert (
+        sqla_filter_for_permissions(
             security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
             permissions=[CAN_MESS_WITH_THINGY],
             targets=["foo"],
         )
-    assert len(w) == 1
-    assert (
-        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
+        == false()
     )
 
-    with pytest.warns(UserWarning) as w:
-        assert (
-            sqla_filter_for_permissions(
-                security_context=Context(
-                    origin=ContextOriginEnum.internal, scopes=["*"]
-                ),
-                permissions=[CAN_MESS_WITH_THINGY],
-                targets=["foo"],
-            )
-            == false()
-        )
-
-    assert len(w) == 2
-    assert (
-        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
-    )
-    assert (
-        str(w[1].message)
-        == "Targets to `sqla_filter_for_permissions` should be classes, not instances"
+    assert len(caplog.records) == 1
+    assert caplog.records[0].msg == (
+        "No policies found for permission(s): thingy:can_mess_with, "
+        "for context test_permissions.Context"
     )
 
 
@@ -338,7 +340,7 @@ def test_permissions_mismatch_target() -> None:
     )
 
     class OtherThing(object):
-        ...
+        pass
 
     AlwaysGrantPolicyThingyModel(
         name="test_policy",
@@ -361,7 +363,10 @@ def test_permissions_mismatch_target() -> None:
     )
 
 
-def test_permissions_no_targets() -> None:
+def test_permissions_no_targets(caplog: LogCaptureFixture) -> None:
+    logger = logging.getLogger("axantir.permissions.actions")
+    logger.setLevel(logging.DEBUG)
+
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
         target_type=Thingy,
@@ -372,33 +377,32 @@ def test_permissions_no_targets() -> None:
         target_permissions=[CAN_MESS_WITH_THINGY],
     )
 
-    with pytest.warns(UserWarning) as w:
-        assert not has_permissions(
+    assert not has_permissions(
+        security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_MESS_WITH_THINGY],
+        targets=[],
+    )
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].msg == (
+        "No policies found for permission(s): thingy:can_mess_with, "
+        "for context test_permissions.Context"
+    )
+    caplog.clear()
+
+    assert (
+        sqla_filter_for_permissions(
             security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
             permissions=[CAN_MESS_WITH_THINGY],
             targets=[],
         )
-
-    assert len(w) == 1
-    assert (
-        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
+        == false()
     )
 
-    with pytest.warns(UserWarning) as w:
-        assert (
-            sqla_filter_for_permissions(
-                security_context=Context(
-                    origin=ContextOriginEnum.internal, scopes=["*"]
-                ),
-                permissions=[CAN_MESS_WITH_THINGY],
-                targets=[],
-            )
-            == false()
-        )
-
-    assert len(w) == 1
-    assert (
-        str(w[0].message) == "No targets found for permission(s): thingy:can_mess_with"
+    assert len(caplog.records) == 1
+    assert caplog.records[0].msg == (
+        "No policies found for permission(s): thingy:can_mess_with, "
+        "for context test_permissions.Context"
     )
 
 
@@ -444,7 +448,10 @@ def test_no_policy_for_permission() -> None:
     assert str(w[0].message) == "No policy found for permission: `do_whatever`"
 
 
-def test_no_policy_for_target() -> None:
+def test_no_policy_for_target(caplog: LogCaptureFixture) -> None:
+    logger = logging.getLogger("axantir.permissions.actions")
+    logger.setLevel(logging.DEBUG)
+
     CAN_MESS_WITH_THINGY = Permission(
         name="can_mess_with",
         target_type=Thingy,
@@ -458,30 +465,33 @@ def test_no_policy_for_target() -> None:
     class Thingy2(object):
         pass
 
-    with pytest.warns(UserWarning) as w:
-        assert not has_permissions(
+    assert not has_permissions(
+        security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
+        permissions=[CAN_MESS_WITH_THINGY],
+        targets=[Thingy(), Thingy2()],
+    )
+
+    assert len(caplog.records) == 1
+    assert (
+        caplog.records[0].msg
+        == "No policies found for target(s): Thingy2, for context test_permissions.Context"
+    )
+    caplog.clear()
+
+    assert (
+        sqla_filter_for_permissions(
             security_context=Context(origin=ContextOriginEnum.internal, scopes=["*"]),
             permissions=[CAN_MESS_WITH_THINGY],
-            targets=[Thingy(), Thingy2()],
+            targets=[Thingy, Thingy2],
         )
+        == false()
+    )
 
-    assert len(w) == 1
-    assert str(w[0].message) == "No policies found for target(s): Thingy2"
-
-    with pytest.warns(UserWarning) as w:
-        assert (
-            sqla_filter_for_permissions(
-                security_context=Context(
-                    origin=ContextOriginEnum.internal, scopes=["*"]
-                ),
-                permissions=[CAN_MESS_WITH_THINGY],
-                targets=[Thingy, Thingy2],
-            )
-            == false()
-        )
-
-    assert len(w) == 1
-    assert str(w[0].message) == "No policies found for target(s): Thingy2"
+    assert len(caplog.records) == 1
+    assert (
+        caplog.records[0].msg
+        == "No policies found for target(s): Thingy2, for context test_permissions.Context"
+    )
 
 
 def test_multiple_policies_for_target() -> None:
@@ -677,6 +687,73 @@ def test_scopes_mismatch() -> None:
         )
         == false()
     )
+
+
+@pytest.mark.parametrize(
+    "context_type",
+    [
+        None,
+        "first",
+        "second",
+        "both",
+    ],
+)
+def test_context_specific_policy(context_type: str) -> None:
+    class CTX1(SecurityContext):
+        def audit_data(self) -> dict:
+            return {}
+
+    class CTX2(SecurityContext):
+        def audit_data(self) -> dict:
+            return {}
+
+    CAN_MESS_WITH_THINGY = Permission(
+        name="can_mess_with",
+        target_type=Thingy,
+    )
+
+    policy_kwargs = {
+        "name": "test_policy",
+        "target_permissions": [CAN_MESS_WITH_THINGY],
+    }
+
+    match context_type:
+        case "first":
+            policy_kwargs["context_types"] = [CTX1]
+
+        case "second":
+            policy_kwargs["context_types"] = [CTX2]
+
+        case "both":
+            policy_kwargs["context_types"] = [CTX1, CTX2]
+
+    AlwaysGrantPolicy(**policy_kwargs)
+
+    if "context_types" not in policy_kwargs or CTX1 in policy_kwargs["context_types"]:
+        assert has_permissions(
+            security_context=CTX1(origin="session", scopes=["*"]),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy()],
+        )
+    else:
+        assert not has_permissions(
+            security_context=CTX1(origin="session", scopes=["*"]),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy()],
+        )
+
+    if "context_types" not in policy_kwargs or CTX2 in policy_kwargs["context_types"]:
+        assert has_permissions(
+            security_context=CTX2(origin="session", scopes=["*"]),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy()],
+        )
+    else:
+        assert not has_permissions(
+            security_context=CTX2(origin="session", scopes=["*"]),
+            permissions=[CAN_MESS_WITH_THINGY],
+            targets=[Thingy()],
+        )
 
 
 # multi-perms

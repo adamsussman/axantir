@@ -1,4 +1,5 @@
 import inspect
+import logging
 import operator
 import warnings
 from collections import defaultdict
@@ -35,7 +36,9 @@ def has_permissions(
     if not permissions:
         return False
 
-    policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
+    policy_permissions, policy_targets = _get_policy_groups(
+        permissions, targets, security_context
+    )
 
     if (
         policy_permissions
@@ -77,7 +80,9 @@ def sqla_filter_for_permissions(
     if not permissions:
         return false()
 
-    policy_permissions, policy_targets = _get_policy_groups(permissions, targets)
+    policy_permissions, policy_targets = _get_policy_groups(
+        permissions, targets, security_context
+    )
 
     for target in targets:
         if not inspect.isclass(target):
@@ -117,7 +122,9 @@ def sqla_filter_for_permissions(
 def _get_policy_groups(
     permissions: List[Permission],
     targets: List[Any],
+    security_context: SecurityContext,
 ) -> Tuple[Dict[TargetPolicy, Set[Permission]], Dict[TargetPolicy, List[Any]]]:
+    logger = logging.getLogger(__name__)
     policy_permissions: Dict[TargetPolicy, Set[Permission]] = defaultdict(set)
     policy_targets: Dict[TargetPolicy, List[Any]] = defaultdict(list)
 
@@ -134,6 +141,12 @@ def _get_policy_groups(
             return {}, {}
 
         for policy in policies:
+            if (
+                policy.context_types
+                and type(security_context) not in policy.context_types
+            ):
+                continue
+
             policy_permissions[policy].update(
                 [
                     perm
@@ -143,19 +156,23 @@ def _get_policy_groups(
                 ]
             )
             for target in targets:
-                targets = [perm.target_type for perm in policy.target_permissions]
+                this_policy_targets = [
+                    perm.target_type for perm in policy.target_permissions
+                ]
                 target_class = target if inspect.isclass(target) else target.__class__
-                if target_class in targets:
+                if target_class in this_policy_targets:
                     policy_targets[policy].append(target)
 
-    handled_permissions = set(
-        reduce(operator.iconcat, [list(pp) for pp in policy_permissions.values()])
+    handled_permissions: Set[Permission] = set(
+        reduce(operator.iconcat, [list(pp) for pp in policy_permissions.values()], [])
     )
-    unhandled_permissions = set(permissions) - handled_permissions
+    unhandled_permissions: Set[Permission] = set(permissions) - handled_permissions
     if unhandled_permissions:
-        warnings.warn(
-            f"No targets found for permission(s): "
-            f"{', '.join([p.id for p in unhandled_permissions])}",
+        logger.debug(
+            f"No policies found for permission(s): "
+            f"{', '.join([p.id for p in unhandled_permissions])}, "
+            f"for context {security_context.__class__.__module__}."
+            f"{security_context.__class__.__name__}",
             stacklevel=3,
         )
         return {}, {}
@@ -170,8 +187,11 @@ def _get_policy_groups(
             t.__name__ if inspect.isclass(t) else t.__class__.__name__
             for t in unhandled_targets
         ]
-        warnings.warn(
-            f"No policies found for target(s): " f"{', '.join(target_names)}",
+        logger.debug(
+            f"No policies found for target(s): "
+            f"{', '.join(target_names)}, "
+            f"for context {security_context.__class__.__module__}."
+            f"{security_context.__class__.__name__}",
             stacklevel=3,
         )
         return {}, {}
