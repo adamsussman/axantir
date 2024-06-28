@@ -235,3 +235,59 @@ def test_warning_missing_context_obj_keys_nullable(
         "expected fields(s): test_audit_log.MyContextObject: attribute1; dict: c"
         in warns[0]
     )
+
+
+def test_conext_object_includes_conflicts_with_spec_keys(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    class MyContextObject(BaseModel):
+        name: str
+
+    class MyContextObject2(BaseModel):
+        version: str
+
+    class MyContextObject3(BaseModel):
+        context_objects: str
+
+    my_action = AuditActionSpec(
+        name="my_action",
+        version="1.0.0",
+        context_objects=[
+            {
+                "object_class": MyContextObject,
+                "includes": ["name"],
+            },
+            {
+                "object_class": MyContextObject2,
+                "includes": ["version"],
+            },
+            {
+                "object_class": MyContextObject3,
+                "includes": ["context_objects"],
+            },
+        ],
+    )
+
+    audit_logger = AuditLogger(emitters=[EmitterLog()])
+    audit_logger.emit_action(
+        my_action,
+        MyContextObject(name="foo"),
+        MyContextObject2(version="1.2.3"),
+        MyContextObject3(context_objects="stuff"),
+    )
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+    assert message["action"] == {
+        "name": "my_action",
+        "version": "1.0.0",
+        "object_name": "foo",
+        "object_version": "1.2.3",
+        "object_context_objects": "stuff",
+    }

@@ -38,6 +38,7 @@ def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> 
 
     seen_objects: Set[str] = set()
     missing_object_keys: Dict[str, Set[str]] = defaultdict(set)
+    action_spec_field_names = list(action.model_fields.keys())
 
     for obj in context_objects or []:
         fqcn = fully_qualified_class_name(obj)
@@ -51,6 +52,10 @@ def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> 
 
         for key in spec.includes:
             value = obj.get(key) if is_dict else dotted_getattr(obj, key)
+            # modify key if it conflicts with other spec attributes
+            if key in action_spec_field_names:
+                key = f"object_{key}"
+
             if value is not None:
                 body[key] = value
             elif key not in spec.nullable:
