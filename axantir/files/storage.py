@@ -288,15 +288,21 @@ class FileStoreS3(FileStoreBase):
         enable_remote_x_accel: bool = False,
         key_prefix: Optional[str] = None,
     ):
-        self.s3_client = boto3.client(
-            "s3",
-            # endpoint_url only needs to be set for AWS S3 standins such as Minio
-            # otherwise leave blank for the real AWS service (unless using S3
-            # Transfer Acceleration)
-            endpoint_url=endpoint_url,
+        # If credentials are not set here, then presume that credentials are
+        # to be fetched from the running environment, which may be expensive,
+        # depending on the setup. So attempt to preload and pre-cache them.
+        session = boto3.Session(
             region_name=aws_region_name,
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
+        )
+        session.get_credentials().get_frozen_credentials()
+
+        self.s3_client = session.client(
+            "s3",
+            # endpoint_url only needs to be set for AWS S3 standins such as Minio
+            # or specific configurations (such as S3 Transfer Acceleration).
+            endpoint_url=endpoint_url,
         )
         self.s3_bucket_name = s3_bucket_name
         self.enable_remote_x_accel = enable_remote_x_accel
