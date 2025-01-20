@@ -1,7 +1,8 @@
+import enum
 from collections import defaultdict
 from inspect import isclass
 from logging import getLogger
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
 from .schemas import AuditActionSpec, ContextObjectFieldSpec
 
@@ -41,10 +42,15 @@ def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> 
     action_spec_field_names = list(action.model_fields.keys())
 
     for obj in context_objects or []:
-        fqcn = fully_qualified_class_name(obj)
-        seen_objects.add(fqcn)
+        spec: Optional[ContextObjectFieldSpec] = None
 
-        spec = context_specs_by_fqcn.get(fqcn)
+        for cls in obj.__class__.mro():
+            fqcn = fully_qualified_class_name(cls)
+            spec = context_specs_by_fqcn.get(fqcn)
+            if spec:
+                seen_objects.add(fqcn)
+                break
+
         if not spec:
             continue
 
@@ -52,6 +58,9 @@ def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> 
 
         for key in spec.includes:
             value = obj.get(key) if is_dict else dotted_getattr(obj, key)
+            if value is not None and isinstance(value, enum.Enum):
+                value = value.value
+
             # modify key if it conflicts with other spec attributes
             if key in action_spec_field_names:
                 key = f"object_{key}"
