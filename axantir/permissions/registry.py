@@ -39,6 +39,21 @@ class Registry(object):
         for permission in policy.target_permissions:
             self.policies_by_permission[permission].add(policy)
 
+            # We can't support multuple policies per permission per security context type
+            # because we take the AND of multiple permissions in the action queries.  We can
+            # only support one mode out of the two, since it has to be an OR for multiple policies.
+            by_context_counts: Dict[str, int] = defaultdict(int)
+            for permission_policy in self.policies_by_permission[permission]:
+                for context_type in permission_policy.context_types or []:
+                    by_context_counts[str(context_type)] += 1
+
+            if any([count > 1 for count in by_context_counts.values()]):
+                raise TypeError(
+                    "Multiple policies per permission are not supported "
+                    f"({str(by_context_counts.items())}: {str(permission.target_type)} "
+                    f":{permission.name})"
+                )
+
     def get_all_permissions(self) -> List[Permission]:
         return sorted(self.permissions_by_id.values(), key=lambda p: p.id)
 
