@@ -101,7 +101,7 @@ def sqla_filter_for_permissions(
                 targets=policy_targets[policy],
             )
             if clause is None:
-                raise Exception(f"policy {policy.id} returned sqla_filter None")
+                continue
             clauses.append(clause)
 
         if len(clauses) == 0:
