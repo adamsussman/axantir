@@ -4,7 +4,7 @@ import operator
 import warnings
 from collections import defaultdict
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Type
 
 try:
     from sqlalchemy.sql.elements import ColumnElement
@@ -71,7 +71,7 @@ def sqla_filter_for_permissions(
     security_context: SecurityContext,
     permissions: List[Permission],
     targets: List[Any],
-) -> ColumnElement:
+) -> Optional[ColumnElement]:
     from sqlalchemy import False_, false
 
     permissions = _filter_permissions_by_scopes(
@@ -105,7 +105,7 @@ def sqla_filter_for_permissions(
             clauses.append(clause)
 
         if len(clauses) == 0:
-            raise Exception(f"policy {policy.id} returned zero sqla_filters")
+            return None
 
         elif len(clauses) == 1:
             return clauses[0]

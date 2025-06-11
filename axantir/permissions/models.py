@@ -79,7 +79,7 @@ class TargetPolicy(BaseModel, abc.ABC):
         security_context: SecurityContext,
         permissions: List[Permission],
         targets: List[Any],
-    ) -> ColumnElement:
+    ) -> Optional[ColumnElement]:
         """
         Return where clause filter.
 
