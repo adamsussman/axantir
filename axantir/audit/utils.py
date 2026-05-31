@@ -39,7 +39,7 @@ def action_body_from_context(action: AuditActionSpec, *context_objects: Any) -> 
 
     seen_objects: Set[str] = set()
     missing_object_keys: Dict[str, Set[str]] = defaultdict(set)
-    action_spec_field_names = list(action.model_fields.keys())
+    action_spec_field_names = list(type(action).model_fields)
 
     for obj in context_objects or []:
         spec: Optional[ContextObjectFieldSpec] = None

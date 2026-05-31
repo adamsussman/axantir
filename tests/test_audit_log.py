@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from axantir.audit import AuditActionSpec, AuditLogger, EmitterLog
 from axantir.audit.emitter import SubsecondJSONEncoder
+from axantir.audit.schemas import AuditEvent
 
 
 def utcnow() -> datetime.datetime:
@@ -291,3 +292,165 @@ def test_conext_object_includes_conflicts_with_spec_keys(
         "object_version": "1.2.3",
         "object_context_objects": "stuff",
     }
+
+
+def test_emit_with_custom_event_class_and_event_kwargs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    class MyAuditEvent(AuditEvent):
+        request_id: str
+        tenant: Optional[str] = None
+
+    action1 = AuditActionSpec(
+        version="1.0.0",
+        name="action1",
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()], event_class=MyAuditEvent)
+    audit.emit_action(action1, request_id="req-abc-123", tenant="acme")
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+
+    assert message["request_id"] == "req-abc-123"
+    assert message["tenant"] == "acme"
+    assert message["action"] == {
+        "name": "action1",
+        "version": "1.0.0",
+    }
+
+
+def test_emit_with_custom_event_class_uses_defaults(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    class MyAuditEvent(AuditEvent):
+        source: str = "default-source"
+
+    action1 = AuditActionSpec(
+        version="1.0.0",
+        name="action1",
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()], event_class=MyAuditEvent)
+    audit.emit_action(action1)
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+
+    assert message["source"] == "default-source"
+
+
+def test_event_class_defaults_to_audit_event(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    action1 = AuditActionSpec(
+        version="1.0.0",
+        name="action1",
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()])
+    assert audit.event_class is AuditEvent
+
+    audit.emit_action(action1)
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+    # base AuditEvent has only version, header, action — no extras
+    assert set(message.keys()) == {"version", "header", "action"}
+
+
+def test_emit_event_kwargs_combined_with_context_objects(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    class MyAuditEvent(AuditEvent):
+        correlation_id: str
+
+    my_action = AuditActionSpec(
+        name="my_action",
+        version="1.0.0",
+        context_objects=[{"object_class": dict, "includes": ["attribute1"]}],
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()], event_class=MyAuditEvent)
+    audit.emit_action(
+        my_action,
+        {"attribute1": "val1"},
+        correlation_id="corr-xyz",
+    )
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+
+    assert message["correlation_id"] == "corr-xyz"
+    assert message["action"] == {
+        "name": "my_action",
+        "version": "1.0.0",
+        "attribute1": "val1",
+    }
+
+
+def test_emit_event_kwargs_missing_required_field_is_swallowed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO")
+
+    class MyAuditEvent(AuditEvent):
+        request_id: str  # required, no default
+
+    action1 = AuditActionSpec(
+        version="1.0.0",
+        name="action1",
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()], event_class=MyAuditEvent)
+    # Failure to construct the event must not raise — it is logged and swallowed.
+    audit.emit_action(action1)
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert infos == []
+    assert len(errors) == 1
+    assert "audit emit failed for action `action1:1.0.0`" in errors[0].message
+
+
+def test_emit_event_kwargs_ignored_with_default_event_class(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The default AuditEvent has no `extra='allow'`, so unknown event_kwargs
+    are silently ignored by pydantic — emission still succeeds."""
+    caplog.set_level("INFO")
+
+    action1 = AuditActionSpec(
+        version="1.0.0",
+        name="action1",
+    )
+
+    audit = AuditLogger(emitters=[EmitterLog()])
+    audit.emit_action(action1, unknown_kwarg="should-be-dropped")
+
+    infos = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert len(infos) == 1
+    match = re.match(r"(\{[^\n]*)", infos[0])
+    assert match
+    message = json.loads(match.group(0))
+    assert "unknown_kwarg" not in message

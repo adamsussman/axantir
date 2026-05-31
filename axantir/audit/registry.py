@@ -9,8 +9,14 @@ class AuditActionRegistry(BaseModel):
     actions_by_name_ver: Dict[str, AuditActionSpec] = Field(default_factory=dict)
 
     def clear(self) -> None:
-        for field_name, field in self.model_fields.items():
-            setattr(self, field_name, field.get_default(call_default_factory=True))
+        for field_name in list(type(self).model_fields):
+            setattr(
+                self,
+                field_name,
+                type(self)
+                .model_fields[field_name]
+                .get_default(call_default_factory=True),
+            )
 
     def register_action(self, action: AuditActionSpec) -> None:
         key = ":".join([action.name, action.version])

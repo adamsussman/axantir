@@ -11,17 +11,21 @@ class AuditLogger(object):
     def __init__(
         self,
         emitters: List[Emitter],
+        event_class: Optional[Type[AuditEvent]] = None,
         header_class: Optional[Type[AuditHeaderBase]] = None,
         exception_logger_name: Optional[str] = None,
     ) -> None:
         if not emitters or not all([isinstance(e, Emitter) for e in emitters]):
             raise Exception("Emitters required")
 
+        self.event_class = event_class or AuditEvent
         self.header_class = header_class or AuditHeaderBase
         self.emitters = emitters
         self.exception_logger_name = exception_logger_name
 
-    def emit_action(self, action: AuditActionSpec, *context_objects: Any) -> None:
+    def emit_action(
+        self, action: AuditActionSpec, *context_objects: Any, **event_kwargs: Any
+    ) -> None:
         try:
             assert self.header_class
 
@@ -34,13 +38,14 @@ class AuditLogger(object):
 
             header = self.header_class(**header_kwargs)
 
-            event = AuditEvent(
+            event = self.event_class(
                 header=header,
                 action=AuditAction(
                     name=action.name,
                     version=action.version,
                     **action_body_from_context(action, *context_objects),
                 ),
+                **event_kwargs,
             )
             for emitter in self.emitters:
                 try:

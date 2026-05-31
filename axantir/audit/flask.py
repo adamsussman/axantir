@@ -4,7 +4,7 @@ from flask import Flask
 
 from .audit_logger import AuditLogger
 from .emitter import EmitterLog
-from .schemas import AuditActionSpec, AuditHeaderBase
+from .schemas import AuditActionSpec, AuditEvent, AuditHeaderBase
 
 EXTENSION_KEY = "audit_logger"
 
@@ -15,12 +15,15 @@ class FlaskAuditLogger(object):
     def __init__(
         self,
         audit_logger: Optional[AuditLogger] = None,
+        audit_event_class: Optional[Type[AuditEvent]] = None,
         audit_header_class: Optional[Type[AuditHeaderBase]] = None,
         app: Optional[Flask] = None,
     ) -> None:
         self.app = app
         self.audit_logger = audit_logger or AuditLogger(
-            emitters=[EmitterLog()], header_class=audit_header_class
+            emitters=[EmitterLog()],
+            event_class=audit_event_class,
+            header_class=audit_header_class,
         )
 
         if app is not None:
