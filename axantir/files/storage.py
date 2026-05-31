@@ -296,7 +296,9 @@ class FileStoreS3(FileStoreBase):
             aws_access_key_id=aws_access_key_id,
             aws_secret_access_key=aws_secret_access_key,
         )
-        session.get_credentials().get_frozen_credentials()
+        credentials = session.get_credentials()
+        if credentials is not None:
+            credentials.get_frozen_credentials()
 
         self.s3_client = session.client(
             "s3",
@@ -331,12 +333,15 @@ class FileStoreS3(FileStoreBase):
     def _save_file_content(
         self, file_object: File, content: BINARY_CONTENT_TYPE
     ) -> File:
+        if isinstance(content, bytearray):
+            content = bytes(content)
+
         key = self.key_for_file(file_object)
         self.s3_client.put_object(
             ACL="private",
             Body=content,
             Bucket=self.s3_bucket_name,
-            ContentType=file_object.mime_type,
+            ContentType=file_object.mime_type or "application/octet-stream",
             Key=key,
             # ServerSideEncryption: This is handled via bucket policy
             StorageClass="STANDARD",
@@ -392,7 +397,7 @@ class FileStoreS3(FileStoreBase):
                 Key=key,
                 # IfModifiedSince
             )
-            return response["Body"]
+            return typing.cast(typing.BinaryIO, response["Body"])
         except botocore.exceptions.ClientError as ex:
             if ex.response["Error"]["Code"] == "NoSuchKey":
                 return None

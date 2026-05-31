@@ -21,6 +21,7 @@ def get_file_mime_type(
 
     else:
         mime_type = (
-            magic.from_buffer(content[:2048], mime=True) or "application/octet-stream"
+            magic.from_buffer(bytes(content[:2048]), mime=True)
+            or "application/octet-stream"
         )
     return mime_type
